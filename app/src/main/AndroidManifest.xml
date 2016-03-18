@@ -11,10 +11,16 @@
         <activity android:name=".ToDoListManagerActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
-
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name=".AddNewTodoItemActivity"
+                android:theme="@android:style/Theme.Dialog"
+                android:parentActivityName=".ToDoListManagerActivity"
+                android:excludeFromRecents="true"
+            android:label="@string/title_add_new_item">
+                <meta-data android:name="android.support.PARENT_ACTIVITY"
+                    android:value=".ToDoListManagerActivity" />
+        </activity>
     </application>
-
 </manifest>
