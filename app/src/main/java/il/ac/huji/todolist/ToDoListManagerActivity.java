@@ -1,51 +1,66 @@
 package il.ac.huji.todolist;
 
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Color;
 import android.net.Uri;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
 import android.view.ContextMenu;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.BaseAdapter;
 import android.widget.ListView;
+import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 public class ToDoListManagerActivity extends AppCompatActivity {
 
     static final int NEW_ITEM_REQUEST = 1;
 
-    private List<TodoItem> todos;
-    private TodoListAdapter adapter;
+    private SimpleCursorAdapter adapter;
+    private TodoSqlHelper todoDB;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_to_do_list_manager);
+
         ListView list = (ListView) findViewById(R.id.lstTodoItems);
-        todos = new ArrayList<>();
-        adapter = new TodoListAdapter(getApplicationContext(),
-                R.layout.todo_item, R.id.txtTodoTitle, R.id.txtTodoDueDate, todos);
-        list.setAdapter(adapter);
         registerForContextMenu(list);
+        todoDB = new TodoSqlHelper(this);
+        int[] views = {R.id.txtTodoTitle, R.id.txtTodoDueDate};
+        adapter = new SimpleCursorAdapter(this, R.layout.todo_item,
+                todoDB.getTodoList(), TodoSqlHelper.ALL_COLS_NO_ID, views, 0);
+        adapter.setViewBinder(new SimpleCursorAdapter.ViewBinder() {
+            @Override
+            public boolean setViewValue(View view, Cursor cursor, int columnIndex) {
+                TextView textView = (TextView) view;
+                int dateColIndex = cursor.getColumnIndex(TodoSqlHelper.COL_DUE);
+                String date = cursor.getString(dateColIndex);
+                if(DateHelper.isPast(date)){
+                    textView.setTextColor(Color.RED);
+                }else{
+                    textView.setTextColor(ContextCompat.getColor(getApplicationContext(),
+                            R.color.colorPrimaryDark));
+                }
+                return false;
+            }
+        });
+        list.setAdapter(adapter);
     }
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
         super.onCreateContextMenu(menu, v, menuInfo);
         getMenuInflater().inflate(R.menu.menu_todo_item_context, menu);
-
-        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) menuInfo;
-        String itemTitle = todos.get(info.position).getTitle();
+        //AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) menuInfo;
+        int titleColIndex = adapter.getCursor().getColumnIndex(TodoSqlHelper.COL_TITLE);
+        String itemTitle = adapter.getCursor().getString(titleColIndex);
         menu.setHeaderTitle(itemTitle);
         int index = itemTitle.toLowerCase().indexOf("call ");
         if(index == -1){
@@ -60,8 +75,9 @@ public class ToDoListManagerActivity extends AppCompatActivity {
         AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo) item.getMenuInfo();
         switch (item.getItemId()) {
             case R.id.menuItemDelete:
-                todos.remove(info.position);
-                adapter.notifyDataSetChanged();
+                if(todoDB.deleteTodo(info.id)){
+                    adapter.changeCursor(todoDB.getTodoList());
+                }
                 return true;
             case R.id.menuItemCall:
                 String phoneNum = item.getTitle().toString().substring(5);
@@ -98,10 +114,16 @@ public class ToDoListManagerActivity extends AppCompatActivity {
             if(RESULT_OK == resultCode){
                 Date date = (Date) data.getSerializableExtra(AddNewTodoItemActivity.EXTRA_DATE);
                 String title = data.getStringExtra(AddNewTodoItemActivity.EXTRA_TITLE);
-                TodoItem newItem = new TodoItem(title, date);
-                todos.add(newItem);
-                adapter.notifyDataSetChanged();
+                if(todoDB.insertTodo(title, date)){
+                    adapter.changeCursor(todoDB.getTodoList());
+                }
             }
         }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        todoDB.close();
     }
 }
